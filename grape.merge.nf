@@ -49,8 +49,11 @@ log.info "mode               : ${params.mode}"
 log.info "name               : ${params.name}"
 log.info "genome             : ${params.genome}"
 if ( params.mode == 'all' ) {
+	log.info "profile mode		: ${params.prf_mode}"
 	log.info "profile		: ${params.profile}"
 	log.info "species name		: ${params.specie}"
+	log.info "profiles folder 	: ${params.prf_folder}"
+	log.info "profiles file		: ${params.prf_file}"
 } else if ( params.mode == 'eval' ) {
 	log.info "annotation         : ${params.annotation}"
 }
@@ -76,9 +79,18 @@ secondary_reads = files(params.secondary)
 result_path = file(params.output)
 
 if ( params.mode == 'all' ) {
-	profile_file = file(params.profile)
-	if( !profile_file.exists() ) exit 10, "Missing profile file: ${profile_file}"
-	if ( params.specie == 'null' ) exit 11, "Missing species name: ${specie}"
+	if ( params.prf_mode == 'null' ) exit 1, "Missing profile mode (profile, file)"
+	if ( params.specie == 'null' ) exit 1, "Missing species name: ${params.specie}"
+	if ( params.prf_mode == 'profile' ) {
+		profile_file = file(params.profile)
+		if( !profile_file.exists() ) exit 1, "Missing profile file: ${profile_file}"
+		
+	} else if ( params.prf_mode == 'file' ) {
+		profile_file = file(params.prf_file)
+		if( !profile_file.exists() ) exit 1, "Missing profile file: ${profile_file}"
+		if ( params.prf_folder == 'null' ) exit 1, "Missing profiles folder: ${params.prf_folder}"
+		
+	}
 }
 else if ( params.mode == 'eval') {
 	annotation_file = file(params.annotation)
@@ -141,14 +153,22 @@ if ( params.mode == 'all' ) {
 
 		script:
 		ann_name = "${params.name}_${read_names}.gtf"
-		"""
 		
-		Selenoprofiles ${params.output} ${genome_file} -s \"${params.specie}\" -p ${profile_file} -output_gtf -output_gtf_file ${ann_name}
-
-		"""		
+		if ( params.prf_mode == 'profile' ) {
+			"""
+			Selenoprofiles ${params.output} ${genome_file} -s \"${params.specie}\" -p ${profile_file} -output_gtf -output_gtf_file ${ann_name}
+			x-analyse_gtf.py ${ann_name}
+			"""
+		} else if ( params.prf_mode == 'file' ) {
+			"""
+			Selenoprofiles ${params.output} ${genome_file} -s \"${params.specie}\" -profiles_folder ${params.prf_folder} -fam_list ${profile_file} -output_gtf -output_gtf_file ${ann_name}
+			x-analyse_gtf.py ${ann_name}
+			"""
+		}
+	
 	}
 
-	(annotation_file, annotation_file1, annotation_file2) = annotation.split(3)
+	(annotation_file, annotation_file2, annotation_file3) = annotation.split(3)
 }
 
 
@@ -274,26 +294,52 @@ process cufflinks {
 }
 
 
+if ( params.mode == 'all' ) {
+	process flux {
+	    //errorStrategy 'ignore'
+	    
+	    input:
+	    file bam2
+	    file annotation_file2
 
+	    output:
+	    file '*.quantification.gtf' into quantification
+	    file '*.quantification.stats.txt' into stats
 
-process flux {
-    //errorStrategy 'ignore'
-    
-    input:
-    file bam2
-    file annotation_file1
-
-    output:
-    file '*.quantification.gtf' into quantification
-
-    """
-    # Extract the file name w/o the extension
-    fileName=\$(basename "${bam2}")
-    baseName="\${fileName%.*}"
+	    script:
 	
+		"""
+		# Extract the file name w/o the extension
+	    	fileName=\$(basename "${bam2}")
+	    	baseName="\${fileName%.*}"
+		flux-capacitor -i ${bam2} -a ${annotation_file2} -o \$baseName.quantification.gtf --threads ${params.cpus}
+		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.05
+	    	"""
 
-    flux-capacitor -i ${bam2} -a ${annotation_file1} -o \$baseName.quantification.gtf --threads ${params.cpus}
-    """
+	}
+} else if ( params.mode == 'eval' ) {
+	process flux {
+	    //errorStrategy 'ignore'
+	    
+	    input:
+	    file bam2
+	    file annotation_file
+
+	    output:
+	    file '*.quantification.gtf' into quantification
+	    file '*.quantification.stats.txt' into stats
+
+	    script:
+	
+		"""
+		# Extract the file name w/o the extension
+	    	fileName=\$(basename "${bam2}")
+	    	baseName="\${fileName%.*}"
+		flux-capacitor -i ${bam2} -a ${annotation_file} -o \$baseName.quantification.gtf --threads ${params.cpus}
+		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.05
+	    	"""
+
+	}
 }
 
 
@@ -301,7 +347,7 @@ process flux {
  * producing output files
  */
 if ( params.mode == 'all' ) {
-	annotation_file2.each { it ->
+	annotation_file3.each { it ->
 		log.info "Copying annotation file to results: ${result_path}/${it.name}"
 	    	it.copyTo(result_path)
 		}
@@ -314,6 +360,11 @@ bam3.each { it ->
 
 quantification.each { it -> 
     log.info "Copying quantification file (flux) to results: ${result_path}/${it.name}"
+    it.copyTo(result_path)
+    }
+
+stats.each { it -> 
+    log.info "Copying quantification stats file (flux) to results: ${result_path}/${it.name}"
     it.copyTo(result_path)
     }
 
