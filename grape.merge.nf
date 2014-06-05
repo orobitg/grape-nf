@@ -74,8 +74,8 @@ log.info "\n"
 if( !(params.mapper in ['gem','tophat2'])) { exit 1, "Invalid mapper tool: '${params.mapper}'" }
 
 genome_file = file(params.genome)
-primary_reads = files(params.primary)
-secondary_reads = files(params.secondary)
+primary_reads = files(params.primary).sort()
+secondary_reads = files(params.secondary).sort()
 result_path = file(params.output)
 
 if ( params.mode == 'all' ) {
@@ -146,13 +146,12 @@ if ( params.mode == 'all' ) {
 		input: 
 		file genome_file
 		file profile_file
-		val read_names
 
 		output:
 		file '*.gtf' into annotation
 
 		script:
-		ann_name = "${params.name}_${read_names}.gtf"
+		ann_name = "${params.name}.gtf"
 		
 		if ( params.prf_mode == 'profile' ) {
 			"""
@@ -244,35 +243,35 @@ process mapping {
 }
 
 
-process merge {
+//process merge {
+//
+//   input: 
+//   file bam from bam.toList()
+//
+//   output:
+//   file "*.bam" into bamMerge
 
-   input: 
-   file bam from bam.toList()
+//  """
+//	c=0
+//	bf_array=''
+//	for bf in $bam; do
+//		bf_array=`echo "\${bf_array}-in \${bf} "`	
+//		let c=c+1	
+//   	done
+//
+//	if [ \${c} -ge 2 ]; then
+//		bamtools merge \${bf_array} -out ${params.name}_merged.bam
+//		##MergeSamFiles \${bf_array} O=${params.name}_merged.bam USE_THREADING=true//
+// 	else
+//		mv $bam ${params.name}_merged.bam
+//	fi
 
-   output:
-   file "*.bam" into bamMerge
+//  """
 
-   """
-	c=0
-	bf_array=''
-	for bf in $bam; do
-		bf_array=`echo "\${bf_array}-in \${bf} "`	
-		let c=c+1	
-   	done
+//}
 
-	if [ \${c} -ge 2 ]; then
-		bamtools merge \${bf_array} -out ${params.name}_merged.bam
-		##MergeSamFiles \${bf_array} O=${params.name}_merged.bam USE_THREADING=true
- 	else
-		mv $bam ${params.name}_merged.bam
-	fi
-
-   """
-
-}
-
-
-(bam1, bam2, bam3) = bamMerge.split(3)
+//(bam1, bam2, bam3) = bamMerge.split(3)
+(bam1, bam2, bam3) = bam.split(3)
 
 process cufflinks {
     input:
@@ -313,7 +312,7 @@ if ( params.mode == 'all' ) {
 	    	fileName=\$(basename "${bam2}")
 	    	baseName="\${fileName%.*}"
 		flux-capacitor -i ${bam2} -a ${annotation_file2} -o \$baseName.quantification.gtf --threads ${params.cpus}
-		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.05
+		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.1
 	    	"""
 
 	}
@@ -336,7 +335,7 @@ if ( params.mode == 'all' ) {
 	    	fileName=\$(basename "${bam2}")
 	    	baseName="\${fileName%.*}"
 		flux-capacitor -i ${bam2} -a ${annotation_file} -o \$baseName.quantification.gtf --threads ${params.cpus}
-		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.05
+		x-analyse_quantification.py \$baseName.quantification.gtf \$baseName.quantification.stats.txt 0.1
 	    	"""
 
 	}
