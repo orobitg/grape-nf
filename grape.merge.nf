@@ -271,7 +271,7 @@ process mapping {
 //}
 
 //(bam1, bam2, bam3) = bamMerge.split(3)
-(bam1, bam2, bam3) = bam.split(3)
+(bam1, bam2, bam3) = bam.into(3)
 
 process cufflinks {
     input:
@@ -346,29 +346,29 @@ if ( params.mode == 'all' ) {
  * producing output files
  */
 if ( params.mode == 'all' ) {
-	annotation_file3.each { it ->
+	annotation_file3.subscribe { it ->
 		log.info "Copying annotation file to results: ${result_path}/${it.name}"
 	    	it.copyTo(result_path)
 		}
 }
 
-bam3.each { it ->
+bam3.subscribe { it ->
     log.info "Copying BAM file to results: ${result_path}/${it.name}"
     it.copyTo(result_path)
     }
 
-quantification.each { it -> 
+quantification.subscribe { it ->
     log.info "Copying quantification file (flux) to results: ${result_path}/${it.name}"
     it.copyTo(result_path)
     }
 
-stats.each { it -> 
-    log.info "Copying quantification stats file (flux) to results: ${result_path}/${it.name}"
+transcripts.subscribe { it ->
+    log.info "Copying transcripts file (cufflinks) to results folder: ${result_path}/${it.name}"
     it.copyTo(result_path)
     }
 
-transcripts.each { it -> 
-    log.info "Copying transcripts file (cufflinks) to results folder: ${result_path}/${it.name}"
+stats.subscribe { it -> 
+    log.info "Copying quantification stats file (flux) to results: ${result_path}/${it.name}"
     it.copyTo(result_path)
     }
 
