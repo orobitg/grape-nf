@@ -226,11 +226,27 @@ process mapping {
         # note: it requires the index file name ending with '.gem' suffix
         ln -s genome.index index.gem
         gemtools t-index -i index.gem -a ${annotation_file} -m 150 -t ${params.cpus}
-        gemtools rna-pipeline -i index.gem -a ${annotation_file} -f ${primary_reads} ${secondary_reads} -t ${params.cpus} -q ${params.quality} --name ${bam_name} -r *.junctions.gem -k *.junctions.keys
-	rm *.filtered.bam
-	cp ${bam_name}.bam ${bam_name}_notfiltered.bam2
-	samtools view -bq 20 ${bam_name}.bam > ${bam_name}_filtered.bam
-	mv ${bam_name}_filtered.bam ${bam_name}.bam
+
+        gemtools rna-pipeline -i index.gem -a ${annotation_file} -f ${primary_reads} ${secondary_reads} -t ${params.cpus} -q ${params.quality} --name ${bam_name} -r *.junctions.gem -k *.junctions.keys --no-stats --no-bam
+	
+	gt.quality -i ${bam_name}.map.gz -o ${bam_name}_qc.map -t ${params.cpus}
+	gt.filter -i ${bam_name}_qc.map -o ${bam_name}_m4.map -t ${params.cpus} --max-levenshtein-error 4
+	gt.filter -i ${bam_name}_m4.map -o ${bam_name}_m4_n10.map -t ${params.cpus} --max-matches 10
+	pigz -p ${params.cpus} ${bam_name}_m4_n10.map > ${bam_name}_m4_n10_zip.map.gz
+
+	pigz -p ${params.cpus} -d -c ${bam_name}_m4_n10_zip.map.gz
+	gem-2-sam -i ${bam_name}_m4_n10_zip.map.gz -I index.gem -q offset-${params.quality} -l --expect-paired-end-reads -T ${params.cpus} -o ${bam_name}_m4_n10.sam
+
+	samtools view -S -bq 20 -@ ${params.cpus} ${bam_name}_m4_n10.sam -o ${bam_name}_m4_n10.bam
+	samtools sort -@ ${params.cpus} ${bam_name}_m4_n10.sam ${bam_name}.bam
+	samtools index ${bam_name}.bam ${bam_name}.bam.bai
+
+
+	#rm *.filtered.bam
+	
+	##cp ${bam_name}.bam ${bam_name}_notfiltered.bam2
+	##samtools view -bq 20 ${bam_name}.bam > ${bam_name}_filtered.bam
+	##mv ${bam_name}_filtered.bam ${bam_name}.bam
         
         """
 
@@ -249,34 +265,6 @@ process mapping {
 }
 
 
-//process merge {
-//
-//   input: 
-//   file bam from bam.toList()
-//
-//   output:
-//   file "*.bam" into bamMerge
-
-//  """
-//	c=0
-//	bf_array=''
-//	for bf in $bam; do
-//		bf_array=`echo "\${bf_array}-in \${bf} "`	
-//		let c=c+1	
-//   	done
-//
-//	if [ \${c} -ge 2 ]; then
-//		bamtools merge \${bf_array} -out ${params.name}_merged.bam
-//		##MergeSamFiles \${bf_array} O=${params.name}_merged.bam USE_THREADING=true//
-// 	else
-//		mv $bam ${params.name}_merged.bam
-//	fi
-
-//  """
-
-//}
-
-//(bam1, bam2, bam3) = bamMerge.split(3)
 (bam1, bam2, bam3) = bam.into(3)
 
 process cufflinks {
