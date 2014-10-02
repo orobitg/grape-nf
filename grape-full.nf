@@ -40,6 +40,7 @@ params.annotation  = 'tutorial/ggal/*.gff'
 params.primary     = 'tutorial/ggal/rnaseq/*_1.fastq'
 params.secondary   = 'tutorial/ggal/rnaseq/*_2.fastq'
 params.mapper      = 'gem'
+params.print	   = 'bcfs'
 params.quality     = 33
 params.cpus        = 1
 params.output      = './results'
@@ -68,6 +69,7 @@ if ( params.mode == 'all' || params.mode == 'quantify' ) {
 	log.info "quality            : ${params.quality}"
 	log.info "output             : ${params.output}"
 	log.info "mapper             : ${params.mapper}"
+	log.info "print              : ${params.print}"
 	log.info "unique             : ${params.unique}"
 	log.info "cpus               : ${params.cpus}"
 	log.info "poolSize           : ${config.poolSize}"
@@ -347,28 +349,34 @@ if ( params.mode == 'all' ||  params.mode == 'annotate') {
 }
 
 if ( params.mode == 'all' ||  params.mode == 'quantify') {
-
-	bam3.subscribe { it ->
-	      def bam = it[0]
-	      log.info "Copying BAM file to results: ${result_path}/${bam.name}"
-    	      bam.copyTo(result_path)
-    	}
-
-	if ( params.steps == 'all' || params.steps == 'flux' ) { 
-		quantification.subscribe { it ->
-		    log.info "Copying quantification file (flux) to results: ${result_path}/${it.name}"
-		    it.copyTo(result_path)
-	    	}
-		stats.subscribe { it -> 
-	    		log.info "Copying quantification stats file (flux) to results: ${result_path}/${it.name}"
-	    		it.copyTo(result_path)
+	if (params.print.contains('b')){
+		bam3.subscribe { it ->
+		      def bam = it[0]
+		      log.info "Copying BAM file to results: ${result_path}/${bam.name}"
+	    	      bam.copyTo(result_path)
 	    	}
 	}
+	if ( params.steps == 'all' || params.steps == 'flux' ) { 
+		if (params.print.contains('f')){
+			quantification.subscribe { it ->
+			    log.info "Copying quantification file (flux) to results: ${result_path}/${it.name}"
+			    it.copyTo(result_path)
+		    	}
+		}
+		if (params.print.contains('s')){
+			stats.subscribe { it -> 
+		    		log.info "Copying quantification stats file (flux) to results: ${result_path}/${it.name}"
+		    		it.copyTo(result_path)
+		    	}
+		}
+	}
 	if ( params.steps == 'all' || params.steps == 'cuff' ) {
-		transcripts.subscribe { it ->
-		    log.info "Copying transcripts file (cufflinks) to results folder: ${result_path}/${it.name}"
-		    it.copyTo(result_path)
-	    	}
+		if (params.print.contains('c')){
+			transcripts.subscribe { it ->
+			    log.info "Copying transcripts file (cufflinks) to results folder: ${result_path}/${it.name}"
+			    it.copyTo(result_path)
+		    	}
+		}
 	}
 }
 
